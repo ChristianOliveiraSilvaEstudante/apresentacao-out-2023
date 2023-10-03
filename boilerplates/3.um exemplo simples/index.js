@@ -4,7 +4,7 @@ let canvas, ctx
 const fontFamily = "'Pixelify Sans'"
 
 const game = {
-    stage: 1,
+    stage: 0,
     world: {
         gravity: 4
     },
