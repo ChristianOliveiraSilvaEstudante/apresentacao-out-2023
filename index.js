@@ -3,8 +3,16 @@ let canvas, ctx
 
 const fontFamily = "'Pixelify Sans'"
 
+const stageEnum = {
+    MENU: 0,
+    ANIMATION: 1,
+    GAME: 2,
+    LOSE: 3,
+    WIN: 4,
+}
+
 const game = {
-    stage: 1,
+    stage: stageEnum.MENU,
     sprites: {
         ships: {
             img: new Image(),
@@ -24,66 +32,15 @@ const game = {
             ]
         }
     },
-    player: {
-        hp: 100,
-        damage: 35,
-        speed: 2,
-        active: false,
-        lastShot: 0,
-        position: {
-            x: 0, y: 0, r: 0, ship: 0
-        }
-    },
-    enemies: new Array(5).fill({
-        hp: 100,
-        damage: 15,
-        speed: 2,
-        active: false,
-    }).map((e) => ({...e, 
-        position: {
-            x: getRandomNumber(0, window.innerWidth),
-            y: getRandomNumber(0, window.innerHeight),
-            r: 0,
-            ship: getRandomNumber(1, 11),
-        },
-        targetPosition: {
-            x: getRandomNumber(0, window.innerWidth),
-            y: getRandomNumber(0, window.innerHeight),
-        }
-    })),
-    objects: new Array(1e2).fill({}).map((e) => ({...e, 
-        position: {
-            x: getRandomNumber(0, window.innerWidth),
-            y: getRandomNumber(0, window.innerHeight),
-            r: 0,
-        }
-    })),
-    shots: [],
     controls: {
         keyA: false,
         keyW: false,
         keyD: false,
         keySpace: false,
+        selectIndex: 0,
+        animationStart: null
     }
 }
-
-game.enemies = new Array(11).fill({
-    hp: 100,
-    damage: 30,
-    speed: 2,
-    active: false,
-}).map((e, i) => ({...e, 
-    position: {
-        x: i * 120,
-        y: 200,
-        r: 0,
-        ship: i + 1,
-    },
-    targetPosition: {
-        x: getRandomNumber(0, window.innerWidth),
-        y: getRandomNumber(0, window.innerHeight),
-    }
-})),
 
 window.onload = () => {
     canvas = document.getElementById('canvas')
@@ -105,19 +62,19 @@ const startGame = () => {
 }
 
 const update = () => {
-    const {stage, enemies, player, objects, shots, controls} = game
+    const {stage, enemies, player, shots, controls} = game
 
-    if (stage !== 1) {
+    if (stage !== stageEnum.GAME) {
         return
     }
 
     if (enemies.length === 0) {
-        game.stage = 3
+        game.stage = stageEnum.WIN
         return 
     }
 
     if (player.hp <= 0) {
-        game.stage = 2
+        game.stage = stageEnum.LOSE
         return
     }
 
@@ -220,18 +177,44 @@ const update = () => {
 
 const render = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const { MENU, ANIMATION, GAME, LOSE, WIN } = stageEnum
 
     switch (game.stage) {
-        case 0:
-            drawStaticScene("Precione 'start' para começar!", '#2980b9', '#3498db')
+        case MENU:
+            drawStaticScene("Escolha a nave que vc deseja", '#2980b9', '#3498db')
+
+            const YOffset = canvas.height * 0.5
+            const XOffset = 100
+            let lastWidth = XOffset
+
+            for (let index = 0; index < game.sprites.ships.ships.length; index++) {
+                const { sx, sy, swidth, sheight } = game.sprites.ships.ships[index]
+                const { selectIndex } = game.controls
+                lastWidth += (game.sprites.ships.ships[index - 1]?.swidth || 0) / 2 + 50
+
+                ctx.drawImage(game.sprites.ships.img, sx, sy, swidth, sheight, lastWidth, YOffset, swidth / 2, sheight / 2);
+
+                if (selectIndex === index) {
+                    ctx.strokeStyle = 'white'
+                    ctx.lineWidth = 10;
+                    ctx.strokeRect(lastWidth - 10, YOffset- 10, swidth / 2 + 20, sheight / 2 + 20)
+                } else {
+                    ctx.strokeStyle = '#3498db'
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(lastWidth - 10, YOffset- 10, swidth / 2 + 20, sheight / 2 + 20)
+                }
+            }
             break;
-        case 1:
+        case ANIMATION:
+            drawAnimation()
+            break;
+        case GAME:
             drawGame()
             break;
-        case 2:
+        case LOSE:
             drawStaticScene("Você perdeu!", '#2c3e50', '#34495e')
             break;
-        case 3:
+        case WIN:
             drawStaticScene("Você Venceu!", '#27ae60', '#2ecc71')
             break;
     }
@@ -241,11 +224,40 @@ const drawStaticScene = (title, bgColor, txtColor) => {
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    if ((new Date).getSeconds() % 2 == 0) {
-        ctx.font = "90px " + fontFamily;
-        ctx.fillStyle = txtColor;
-        ctx.fillText(title, 100, 250);
+    ctx.font = "90px " + fontFamily;
+    ctx.fillStyle = txtColor;
+    ctx.fillText(title, 50, 120);
+}
+
+const drawAnimation = () => {
+    const YOffset = canvas.height * 0.5 - (Date.now() - game.controls.animationStart)
+    ctx.fillStyle = YOffset > 0 ? '#2980b9' : 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    if (YOffset > -100) {
+        const XOffset = 100
+        let lastWidth = XOffset
+        
+        for (let index = 0; index < game.sprites.ships.ships.length; index++) {
+            const { sx, sy, swidth, sheight } = game.sprites.ships.ships[index]
+            lastWidth += (game.sprites.ships.ships[index - 1]?.swidth || 0) / 2 + 50
+            
+            ctx.drawImage(game.sprites.ships.img, sx, sy, swidth, sheight, lastWidth, YOffset, swidth / 2, sheight / 2);
+        }
+    } else {
+        for (let index = 0; index < Math.abs(Math.floor(YOffset / 10)); index++) {
+            const { x, y } = generatePseudoRandomPosition(index)
+            ctx.beginPath();
+            ctx.arc(x * 20, y * 10, index % 10 == 0 ? 2 : 1, 0, 2 * Math.PI);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+
+        if (Math.abs(Math.floor(YOffset / 10)) >= 200) {
+            game.stage = stageEnum.GAME
+        }
     }
+
 }
 
 const drawGame = () => {
@@ -290,52 +302,74 @@ const drawGame = () => {
     ctx.fillText(`HP: ${game.player.hp}`, 15, 45);
 }
 
-window.onclick = () => {
-    if (game.stage === 0) {
-        game.stage++;
-    }
-}
-
 document.addEventListener("keyup", function(event) {
     const key = event.key.toLowerCase();
 
-    if (key === " ") {
-        game.controls.keySpace = false
-    }
+    if (game.stage === stageEnum.GAME) {
+        if (key === " ") {
+            game.controls.keySpace = false
+        }
 
-    if (key === "w") {
-        game.controls.keyW = false
-    }
+        if (key === "w") {
+            game.controls.keyW = false
+        }
 
-    if (key === "a") {
-        game.controls.keyA = false
-    }
-    
-    if (key === "d") {
-        game.controls.keyD = false
+        if (key === "a") {
+            game.controls.keyA = false
+        }
+        
+        if (key === "d") {
+            game.controls.keyD = false
+        }
     }
 });
 
 document.addEventListener("keydown", function(event) {
     const key = event.key.toLowerCase();
 
-    if (key === " ") {
-        game.controls.keySpace = true
-    }
+    if (game.stage === stageEnum.MENU) {
+        if (key === "arrowright") {
+            game.controls.selectIndex++
+        }
+        
+        if (key === "arrowleft") {
+            game.controls.selectIndex--
+        }
 
-    if (key === "w") {
-        game.controls.keyW = true
-    }
+        if (game.controls.selectIndex < 0) {
+            game.controls.selectIndex = game.sprites.ships.ships.length -1
+        }
 
-    if (key === "a") {
-        game.controls.keyA = true
-    }
-    
-    if (key === "d") {
-        game.controls.keyD = true
+        if (game.controls.selectIndex > game.sprites.ships.ships.length -1) {
+            game.controls.selectIndex = 0
+        }
+
+        if (key === " " || key === "enter") {
+            startConfig()
+            game.stage = stageEnum.ANIMATION
+            game.controls.animationStart = Date.now()
+            game.player.position.ship = game.controls.selectIndex
+        }
+    } else if (game.stage === stageEnum.GAME) {
+        if (key === " ") {
+            game.controls.keySpace = true
+        }
+        
+        if (key === "w") {
+            game.controls.keyW = true
+        }
+        
+        if (key === "a") {
+            game.controls.keyA = true
+        }
+        
+        if (key === "d") {
+            game.controls.keyD = true
+        }
+    }  else if (game.stage === stageEnum.LOSE || game.stage === stageEnum.WIN) {
+        game.stage = stageEnum.MENU
     }
 });
-
 
 // HELPER FUNCTIONS
 
@@ -355,4 +389,42 @@ function generatePseudoRandomPosition(numeroEntrada) {
 
 function getRandomNumber(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function startConfig() {
+    game.player = {
+        hp: 100,
+        damage: 35,
+        speed: 2,
+        active: false,
+        lastShot: 0,
+        position: {
+            x: 0, y: 0, r: 0, ship: 0
+        }
+    }
+
+    game.enemies = new Array(5).fill({
+        hp: 100,
+        damage: 15,
+        speed: 2,
+        active: false,
+    }).map((e) => ({...e, 
+        position: {
+            x: getRandomNumber(0, window.innerWidth),
+            y: getRandomNumber(0, window.innerHeight),
+            r: 0,
+            ship: getRandomNumber(1, 11),
+        },
+        targetPosition: {
+            x: getRandomNumber(0, window.innerWidth),
+            y: getRandomNumber(0, window.innerHeight),
+        }
+    }))
+
+    game.shots = []
+
+    game.controls.keySpace = false
+    game.controls.keyW = false
+    game.controls.keyA = false
+    game.controls.keyD = false
 }
